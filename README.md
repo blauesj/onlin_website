@@ -49,12 +49,12 @@ npx serve .
 
 ### 2. 把代码推到 GitHub
 
-本仓库已在本地执行过 `git init -b main` 并暂存了文件，可从 `git config` 那一步直接开始；若在别的机器上重来，完整流程如下：
+本仓库已通过 SSH 推送到 `git@github.com:blauesj/onlin_website.git` 的 `main` 分支。若从零开始或换一台机器重来，完整流程如下（已有仓库可跳过前三步）：
 
 ```bash
 cd <项目目录>
 
-# 仅在未初始化时需要（本仓库已做过，可跳过）
+# 仅全新目录需要
 git init -b main
 git add .
 
@@ -63,11 +63,11 @@ git config user.name "你的名字"
 git config user.email "你的邮箱"
 
 git commit -m "init: static site"
-git remote add origin https://github.com/<你的用户名>/<仓库名>.git
+git remote add origin git@github.com:blauesj/onlin_website.git
 git push -u origin main
 ```
 
-仓库可以是 Public 也可以是 Private，Cloudflare Pages 都支持。
+仓库可以是 Public 也可以是 Private，Cloudflare Pages 都支持。若 22 端口被网络阻断，见下方「常见问题」中的 SSH over 443 配置。
 
 ### 3. 在 Cloudflare 创建 Pages 项目
 
@@ -143,6 +143,18 @@ npx wrangler pages deploy . --project-name=yuguang-site
 - **改了 CSS 但线上没变**：`_headers` 给 `/assets/*` 设了 1 天缓存，可在 Cloudflare 该次部署里点 **Retry deployment** 或强刷（Ctrl/Cmd + Shift + R）。
 - **构建报错 `npm: command not found` / 找不到 build**：说明 Build command 没留空，按上表清空即可。
 - **GitHub Pages 也能用吗**：可以，Settings → Pages → Deploy from a branch → `main` / `root`，同样零构建。
+- **SSH 推送报 `Connection closed ... port 22` / `Connection timed out`**：部分网络会封 22 端口。在 `~/.ssh/config` 加入下面几行，即可继续用 `git@github.com:...` 形式的地址，自动走 GitHub 官方的 SSH over 443：
+
+  ```sshconfig
+  Host github.com
+      HostName ssh.github.com
+      Port 443
+      User git
+      IdentityFile ~/.ssh/id_ed25519
+      IdentitiesOnly yes
+  ```
+
+  用 `ssh -T git@github.com` 验证，看到 `Hi <用户名>! You've successfully authenticated` 即成功（GitHub 不提供 shell，返回码 1 属正常）。
 
 ---
 
