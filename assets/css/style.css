@@ -43,6 +43,10 @@ html[data-theme="dark"] {
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* hidden 属性必须能真正隐藏元素：下面的 .countdown 等浮层带 display，
+   会覆盖浏览器默认的 [hidden] { display: none }，所以这里强制一次。 */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; }
 
 body {
@@ -391,6 +395,7 @@ html[data-theme="dark"] .icon-sun { display: none; }
   display: grid; place-items: center;
   background: rgba(8, 8, 16, .55);
   backdrop-filter: blur(2px);
+  pointer-events: none; /* 倒计时只是提示，不该挡住场地点击 */
 }
 .countdown span {
   font-size: clamp(84px, 16vw, 132px); font-weight: 850; line-height: 1;
