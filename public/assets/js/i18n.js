@@ -70,6 +70,7 @@
 
       'status.saving': '正在上榜…',
       'status.saved': '已上榜 · 第 {rank} 名',
+      'status.savedRegion': ' · 本区第 {rank}',
       'status.savedNoRank': '成绩已保存',
       'status.offline': '排行榜暂时不可用，成绩只存在这台设备。',
       'status.failed': '提交失败，成绩只存在这台设备。',
@@ -77,18 +78,29 @@
 
       'board.title': '排行榜',
       'board.refresh': '刷新',
-      'board.sub': '全场前 10 名',
+      'board.scope': '排行榜范围',
+      'board.scope.global': '全球',
+      'board.scope.region': '本区',
+      'board.sub': '前 {n} 名',
+      'board.subRegion': '前 {n} 名 · {region}',
       'board.empty': '还没有成绩，来做第一个上榜的人。',
       'board.you': '你',
-      'board.note.offline': '离线模式：只显示本机成绩',
-      'board.note.error': '连不上服务器，稍后点刷新重试',
+      'board.me': '我的排名',
+      'board.me.global': '全球',
+      'board.me.region': '本区',
+      'board.me.best': '最高',
+      'board.unknownRegion': '未知地区',
+      'board.note.offline': '现在只显示这台设备上的成绩',
+      'board.note.error': '暂时没连上，稍后点刷新试试',
+
+      'device.mobile': '手机',
+      'device.tablet': '平板',
+      'device.desktop': '电脑',
 
       'rules.title': '怎么玩',
       'rules.1': '输入名字，开始后有 3 秒准备，然后计时 30 秒。',
       'rules.2': '连击每 5 次升一档倍率，最高 ×5；金环额外 +50 分和 1 秒。',
-      'rules.3': '结算自动上榜，和所有人比同一套规则。',
-
-      'footer.copy': '成绩保存在 Cloudflare D1，换设备也能看到同一份排行榜。'
+      'rules.3': '结算自动上榜，和所有人比同一套规则。'
     },
 
     en: {
@@ -151,6 +163,7 @@
 
       'status.saving': 'Saving to leaderboard…',
       'status.saved': 'Ranked · #{rank}',
+      'status.savedRegion': ' · #{rank} locally',
       'status.savedNoRank': 'Score saved',
       'status.offline': 'Leaderboard unavailable — score kept on this device only.',
       'status.failed': 'Upload failed — score kept on this device only.',
@@ -158,18 +171,29 @@
 
       'board.title': 'Leaderboard',
       'board.refresh': 'Refresh',
-      'board.sub': 'Top 10 overall',
+      'board.scope': 'Leaderboard scope',
+      'board.scope.global': 'Global',
+      'board.scope.region': 'Local',
+      'board.sub': 'Top {n}',
+      'board.subRegion': 'Top {n} · {region}',
       'board.empty': 'No scores yet — be the first.',
       'board.you': 'you',
-      'board.note.offline': 'Offline mode: local scores only',
-      'board.note.error': 'Cannot reach the server — try refresh later',
+      'board.me': 'My rank',
+      'board.me.global': 'Global',
+      'board.me.region': 'Local',
+      'board.me.best': 'Best',
+      'board.unknownRegion': 'Unknown region',
+      'board.note.offline': 'Showing scores from this device only',
+      'board.note.error': 'Cannot load right now — try refresh',
+
+      'device.mobile': 'Phone',
+      'device.tablet': 'Tablet',
+      'device.desktop': 'Desktop',
 
       'rules.title': 'How to play',
       'rules.1': 'Enter a name, start, and get 3 seconds to prepare. Then the clock runs for 30.',
       'rules.2': 'Every 5 hits raises the multiplier (max ×5). Gold rings give +50 and one extra second.',
-      'rules.3': 'Your score is saved when the round ends, under the same rules for everyone.',
-
-      'footer.copy': 'Scores live in Cloudflare D1, so the same leaderboard follows you across devices.'
+      'rules.3': 'Your score is saved when the round ends, under the same rules for everyone.'
     }
   };
 

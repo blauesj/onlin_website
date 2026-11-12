@@ -118,7 +118,22 @@
             <h2 id="board-title" data-i18n="board.title">排行榜</h2>
             <button class="link-btn" id="refresh-board" type="button" data-i18n="board.refresh">刷新</button>
           </div>
-          <p class="board-sub" data-i18n="board.sub">全场前 10 名</p>
+
+          <div class="board-tabs" role="tablist" aria-label="排行榜范围" data-i18n-aria="board.scope">
+            <button class="board-tab is-active" id="scope-global" type="button" role="tab" aria-selected="true" data-scope="global" data-i18n="board.scope.global">全球</button>
+            <button class="board-tab" id="scope-region" type="button" role="tab" aria-selected="false" data-scope="region" data-i18n="board.scope.region">本区</button>
+          </div>
+
+          <div class="board-me" id="board-me" hidden>
+            <p class="board-me-title" data-i18n="board.me">我的排名</p>
+            <dl class="board-me-stats">
+              <div><dt data-i18n="board.me.global">全球</dt><dd id="board-me-global">—</dd></div>
+              <div><dt data-i18n="board.me.region">本区</dt><dd id="board-me-region">—</dd></div>
+              <div><dt data-i18n="board.me.best">最高</dt><dd id="board-me-best">—</dd></div>
+            </dl>
+          </div>
+
+          <p class="board-sub" id="board-sub">前 50 名</p>
           <ol class="board-list" id="board-list"></ol>
           <p class="board-empty" id="board-empty" hidden data-i18n="board.empty">还没有成绩，来做第一个上榜的人。</p>
           <p class="board-note" id="board-note" hidden></p>
@@ -138,7 +153,6 @@
 
   <footer class="site-footer">
     <div class="container footer-inner">
-      <p data-i18n="footer.copy">成绩保存在 Cloudflare D1，换设备也能看到同一份排行榜。</p>
       <p class="footer-meta">© <span id="year">2026</span> NEON COMBO</p>
     </div>
   </footer>

@@ -1,8 +1,11 @@
 -- ============================================================
--- 霓虹连击 NEON COMBO · Cloudflare D1 建表脚本
+-- 霓虹连击 NEON COMBO · Cloudflare D1 建表脚本（全新数据库）
 -- 用法（二选一）：
 --   1) Cloudflare 控制台 → 存储和数据库 → D1 → 选中数据库 → 控制台 → 粘贴执行
---   2) npx wrangler d1 execute <数据库名> --remote --file=./schema.sql
+--   2) npx wrangler d1 execute neon-combo --remote --file=./schema.sql
+--
+-- ⚠️ 如果数据库里已经有 scores 表（之前建过），不要用这个文件，
+--    改用 migrations/001-add-region-device.sql 做增量升级。
 -- 可重复执行，不会重复建表。
 -- ============================================================
 
@@ -13,11 +16,23 @@ CREATE TABLE IF NOT EXISTS scores (
   best_combo INTEGER NOT NULL DEFAULT 0,
   hits       INTEGER NOT NULL DEFAULT 0,
   misses     INTEGER NOT NULL DEFAULT 0,
+  -- 地域：服务端从 Cloudflare 请求里自动识别（ISO 3166-1 alpha-2，未知为 XX）
+  country    TEXT    NOT NULL DEFAULT 'XX',
+  -- 设备：服务端按 User-Agent 归类，取值 mobile / tablet / desktop
+  device     TEXT    NOT NULL DEFAULT 'desktop',
+  -- 玩家标识：客户端本地随机生成，只用于区分同名玩家，不含个人信息
+  player_id  TEXT,
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
--- 排行榜查询：分数倒序，同分先到先排
+-- 榜单查询：分数倒序，同分先到先排
 CREATE INDEX IF NOT EXISTS idx_scores_rank ON scores (score DESC, created_at ASC);
 
--- 按名字查个人最佳 + 同名节流
+-- 按名字查（兼容没有 player_id 的旧数据）
 CREATE INDEX IF NOT EXISTS idx_scores_name ON scores (name, created_at DESC);
+
+-- 按玩家取最好成绩（前 50 名每人只显示一局）
+CREATE INDEX IF NOT EXISTS idx_scores_player ON scores (player_id, score DESC);
+
+-- 区域榜：同一地域内排序
+CREATE INDEX IF NOT EXISTS idx_scores_country ON scores (country, score DESC);

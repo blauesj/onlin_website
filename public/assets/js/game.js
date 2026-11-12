@@ -15,6 +15,8 @@
     best: 'neoncombo-best',
     sound: 'neoncombo-sound',
     local: 'neoncombo-local-scores',
+    player: 'neoncombo-player',
+    scope: 'neoncombo-scope',
     theme: 'yuguang-theme'
   };
 
@@ -49,6 +51,12 @@
     boardList: $('board-list'),
     boardEmpty: $('board-empty'),
     boardNote: $('board-note'),
+    boardSub: $('board-sub'),
+    boardMe: $('board-me'),
+    boardMeGlobal: $('board-me-global'),
+    boardMeRegion: $('board-me-region'),
+    boardMeBest: $('board-me-best'),
+    tabs: document.querySelectorAll('.board-tab'),
     refresh: $('refresh-board'),
     sound: $('sound-toggle'),
     theme: $('theme-toggle'),
@@ -75,7 +83,12 @@
     seq: 0
   };
 
+  var BOARD_LIMIT = 50;
+
   var lastBoard = [];
+  var lastScope = read(KEYS.scope, 'global') === 'region' ? 'region' : 'global';
+  var lastCountry = '';
+  var me = null;
 
   /* ---------- 本地存储 ---------- */
   function read(key, fallback) {
@@ -584,12 +597,49 @@
     });
   }
 
+  /* ---------- 玩家标识：本机随机生成，只用来区分同名玩家 ---------- */
+  function randomId() {
+    var bytes = new Uint8Array(8);
+    if (window.crypto && window.crypto.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (var k = 0; k < bytes.length; k++) bytes[k] = Math.floor(Math.random() * 256);
+    }
+    var out = '';
+    for (var i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2);
+    return out;
+  }
+
+  function playerId() {
+    var id = read(KEYS.player, '');
+    if (/^[0-9a-f]{8,40}$/.test(id)) return id;
+    id = randomId();
+    write(KEYS.player, id);
+    return id;
+  }
+
+  /* ---------- 地域 / 设备展示 ---------- */
+  function regionName(code) {
+    if (!code || code === 'XX') return t('board.unknownRegion');
+    try {
+      var names = new Intl.DisplayNames([isEn() ? 'en' : 'zh'], { type: 'region' });
+      return names.of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  }
+
+  function deviceName(device) {
+    var key = device === 'mobile' || device === 'tablet' ? device : 'desktop';
+    return t('device.' + key);
+  }
+
   function localBoard() {
     var raw = read(KEYS.local, '[]');
     var list;
     try { list = JSON.parse(raw); } catch (e) { return []; }
     if (!Array.isArray(list)) return [];
-    return list.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
+    return list.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, BOARD_LIMIT);
   }
 
   function saveLocalScore(entry) {
@@ -601,18 +651,39 @@
     write(KEYS.local, JSON.stringify(list.slice(0, 30)));
   }
 
-  function renderBoard(list, highlightName, highlightScore) {
-    lastBoard = Array.isArray(list) ? list.slice(0, 10) : [];
+  /* ---------- 排行榜渲染 ---------- */
+  function syncBoardChrome() {
+    if (nodes.boardSub) {
+      nodes.boardSub.textContent = lastScope === 'region'
+        ? tf('board.subRegion', { n: BOARD_LIMIT, region: regionName(lastCountry) })
+        : tf('board.sub', { n: BOARD_LIMIT });
+    }
+    for (var i = 0; i < nodes.tabs.length; i++) {
+      var tab = nodes.tabs[i];
+      var active = tab.getAttribute('data-scope') === lastScope;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+    }
+  }
+
+  function renderBoard() {
+    var list = (lastBoard || []).slice(0, BOARD_LIMIT);
+    var myTag = me && me.tag ? String(me.tag).toUpperCase() : '';
+
+    syncBoardChrome();
+
     nodes.boardList.innerHTML = '';
 
-    if (!lastBoard.length) {
+    if (!list.length) {
       nodes.boardEmpty.hidden = false;
       return;
     }
     nodes.boardEmpty.hidden = true;
 
-    lastBoard.forEach(function (row, index) {
-      var isMe = highlightName && row.name === highlightName && Number(row.score) === Number(highlightScore);
+    list.forEach(function (row, index) {
+      var tag = row.tag ? String(row.tag).toUpperCase() : '';
+      var isMe = myTag ? tag === myTag : (state.name && row.name === state.name);
+
       var li = document.createElement('li');
       li.className = 'board-row' + (index === 0 ? ' is-top' : '') + (isMe ? ' is-me' : '');
 
@@ -622,12 +693,33 @@
 
       var name = document.createElement('span');
       name.className = 'board-name';
-      name.textContent = row.name;
+
+      var line = document.createElement('span');
+      line.className = 'board-name-line';
+      line.appendChild(document.createTextNode(row.name || ''));
+      if (tag) {
+        var tagEl = document.createElement('em');
+        tagEl.className = 'board-tag';
+        tagEl.textContent = '#' + tag;
+        line.appendChild(tagEl);
+      }
       if (isMe) {
         var badge = document.createElement('em');
         badge.className = 'board-badge';
         badge.textContent = t('board.you');
-        name.appendChild(badge);
+        line.appendChild(badge);
+      }
+      name.appendChild(line);
+
+      /* 地域 + 设备：同名玩家靠这一行区分 */
+      if (row.country || row.device) {
+        var meta = document.createElement('span');
+        meta.className = 'board-meta';
+        var parts = [];
+        if (row.country) parts.push(regionName(row.country));
+        if (row.device) parts.push(deviceName(row.device));
+        meta.textContent = parts.join(' · ');
+        name.appendChild(meta);
       }
 
       var score = document.createElement('span');
@@ -641,15 +733,44 @@
     });
   }
 
+  /* ---------- 我的排名 ---------- */
+  function renderMe() {
+    if (!nodes.boardMe) return;
+    var best = me && Number(me.best) > 0 ? Number(me.best) : 0;
+    nodes.boardMe.hidden = !best;
+    if (!best) return;
+
+    nodes.boardMeGlobal.textContent = me.rank ? '#' + me.rank : '—';
+    nodes.boardMeRegion.textContent = me.regionRank ? '#' + me.regionRank : '—';
+    nodes.boardMeBest.textContent = formatScore(best);
+  }
+
+  function setScope(scope, options) {
+    var next = scope === 'region' ? 'region' : 'global';
+    if (next === lastScope && !(options && options.force)) return;
+    lastScope = next;
+    write(KEYS.scope, next);
+    loadBoard(options);
+  }
+
   function loadBoard(options) {
     var opts = options || {};
     if (!opts.silent) nodes.boardNote.hidden = true;
 
-    return requestJson('/api/scores?limit=10').then(function (data) {
-      renderBoard(data && data.scores ? data.scores : [], state.name, state.score);
+    var url = '/api/scores?scope=' + lastScope + '&player=' + encodeURIComponent(playerId());
+
+    return requestJson(url).then(function (data) {
+      lastBoard = data && data.scores ? data.scores : [];
+      lastCountry = (data && data.country) || lastCountry;
+      if (data && data.player) me = data.player;
+      renderBoard();
+      renderMe();
       nodes.boardNote.hidden = true;
     }).catch(function () {
-      renderBoard(localBoard(), state.name, state.score);
+      lastBoard = localBoard();
+      lastScope = 'global';
+      renderBoard();
+      renderMe();
       nodes.boardNote.hidden = false;
       nodes.boardNote.textContent = navigator.onLine === false ? t('board.note.offline') : t('board.note.error');
     });
@@ -658,8 +779,9 @@
   function gapHint(res) {
     if (!res || !res.scores || !res.rank || res.rank <= 1) return '';
     var above = res.scores[res.rank - 2];
-    if (!above || Number(above.score) <= state.score) return '';
-    return tf('result.gap', { n: formatScore(Number(above.score) - state.score) });
+    var best = Number(res.best) || state.score;
+    if (!above || Number(above.score) <= best) return '';
+    return tf('result.gap', { n: formatScore(Number(above.score) - best) });
   }
 
   function submitScore() {
@@ -673,13 +795,30 @@
         score: state.score,
         bestCombo: state.bestCombo,
         hits: state.hits,
-        misses: state.misses
+        misses: state.misses,
+        playerId: playerId()
       })
     }).then(function (res) {
       var saved = res && res.rank ? tf('status.saved', { rank: res.rank }) : t('status.savedNoRank');
+      if (res && res.regionRank && res.regionRank !== res.rank) {
+        saved += tf('status.savedRegion', { rank: res.regionRank });
+      }
       var gap = gapHint(res);
       setStatus(gap ? saved + ' · ' + gap : saved, true);
-      renderBoard(res && res.scores ? res.scores : [], state.name, state.score);
+
+      me = {
+        name: state.name,
+        tag: res && res.tag ? res.tag : (me && me.tag) || '',
+        best: (res && Number(res.best)) || state.score,
+        rank: (res && res.rank) || 0,
+        regionRank: (res && res.regionRank) || 0
+      };
+      lastBoard = res && res.scores ? res.scores : lastBoard;
+      lastCountry = (res && res.country) || lastCountry;
+      lastScope = 'global';
+      write(KEYS.scope, lastScope);
+      renderBoard();
+      renderMe();
     }).catch(function () {
       saveLocalScore({
         name: state.name,
@@ -746,6 +885,12 @@
       nodes.refresh.addEventListener('click', function () { loadBoard(); });
     }
 
+    for (var ti = 0; ti < nodes.tabs.length; ti++) {
+      nodes.tabs[ti].addEventListener('click', function () {
+        setScope(this.getAttribute('data-scope'), { force: true });
+      });
+    }
+
     if (nodes.sound) {
       nodes.sound.addEventListener('click', function () {
         soundOn = !soundOn;
@@ -788,7 +933,8 @@
       if (state.phase === 'result') {
         nodes.gradeText.textContent = t('grade.' + nodes.grade.getAttribute('data-grade') + '.text');
       }
-      renderBoard(lastBoard, state.name, state.score);
+      renderBoard();
+      renderMe();
       if (nodes.boardNote && !nodes.boardNote.hidden) {
         nodes.boardNote.textContent = navigator.onLine === false ? t('board.note.offline') : t('board.note.error');
       }
@@ -814,6 +960,7 @@
     if (nodes.year) nodes.year.textContent = new Date().getFullYear();
 
     syncSoundButton();
+    syncBoardChrome();
     bindEvents();
     loadBoard();
   }

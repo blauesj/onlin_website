@@ -4,7 +4,7 @@
 
 站点跑在 **Cloudflare Workers + 静态资源**（`assets`）上：静态文件由边缘节点直出，只有 `/api/*` 进 Worker。
 
-> 线上地址形如 `https://<Worker 项目名>.<你的子域>.workers.dev`。D1 已绑定在 `wrangler.jsonc`（`binding: DB`），只需在数据库里**执行一次 `schema.sql` 建表**；表不存在时接口返回 500，游戏里会退成「离线模式」，成绩只存本机。见下方「D1 排行榜配置」。
+> 线上地址形如 `https://<Worker 项目名>.<你的子域>.workers.dev`。D1 已绑定在 `wrangler.jsonc`（`binding: DB`），只需在数据库里执行建表脚本：**新库用 `schema.sql`，之前建过表的老库用 `migrations/001-add-region-device.sql`**。表不存在或缺列时接口返回 500，游戏里会退成「离线模式」，成绩只存本机。见下方「D1 排行榜配置」。
 
 ---
 
@@ -22,6 +22,22 @@
 | 评级 | 按总分给 S / A / B / C / D，附命中率与最高连击 |
 
 一局只有 30 秒，结算页的「再来一局」默认聚焦，按回车或空格即可直接开下一局。
+
+## 排行榜
+
+- **前 50 名**，每人只显示自己**最好的一局**（不会一个人占满整榜）
+- 两个视角：**全球**（所有玩家）和**本区**（自动识别访客所在地区）
+- 侧栏顶部常驻「**我的排名**」卡片：全球名次、本区名次、个人最高分
+
+**同名玩家怎么区分**：名字允许重复，靠三样自动获取的信息区分，前端不用填任何额外内容。
+
+| 信息 | 来源 | 展示 |
+| --- | --- | --- |
+| 地区 | 服务端读 `request.cf.country`（Cloudflare 提供，ISO 国家码） | 榜单第二行显示「中国 / 日本 / …」 |
+| 设备 | 服务端按 `User-Agent` 归类为 mobile / tablet / desktop | 显示「手机 / 平板 / 电脑」 |
+| 玩家标识 | 浏览器本地随机生成 16 位十六进制，存在 `localStorage` | 名字后的 `#A3F9` 短标签 |
+
+地区与设备都由**服务端**从请求里取，前端传了也不作数，所以既无法伪装地区，也不会上传任何个人信息；`#` 标签只用来在同名时区分和标记「你」，换设备会变成新的标签。
 
 ---
 
@@ -43,7 +59,9 @@
 │   ├── index.js                # Worker 入口：/api/scores 路由 + 其余交给 ASSETS
 │   └── scores.js               # 排行榜逻辑：GET 读榜 / POST 提交（含校验与节流）
 ├── wrangler.jsonc              # Workers 配置：项目名、入口、静态资源、D1 绑定
-├── schema.sql                  # D1 建表脚本（在 D1 控制台执行一次）
+├── schema.sql                  # D1 建表脚本（全新数据库用）
+├── migrations/
+│   └── 001-add-region-device.sql  # 增量升级：给已有表补 地域/设备/玩家标识
 ├── .gitignore
 ├── .gitattributes
 └── README.md
@@ -137,13 +155,30 @@ curl -s https://<项目名>.<子域>.workers.dev/api/scores
 
 ### 2. 建表
 
-进入数据库 → **Console / 控制台** → 粘贴 `schema.sql` 全部内容 → **Execute / 执行**。会创建 `scores` 表和两个索引（`CREATE TABLE IF NOT EXISTS`，重复执行不报错）。
+**全新数据库**（从没建过表）→ 执行根目录的 `schema.sql`：
+
+```
+控制台 → D1 → 选中数据库 → Console / 控制台 → 粘贴 schema.sql 全部内容 → Execute / 执行
+```
+
+**已经有 `scores` 表**（之前建过）→ 不要用 `schema.sql`，执行增量迁移：
+
+```
+控制台 → D1 → 选中数据库 → Console / 控制台 → 粘贴 migrations/001-add-region-device.sql → Execute
+```
+
+迁移会给旧表补上 `country` / `device` / `player_id` 三列并加索引；旧数据自动填成 `XX` / `desktop` / 空，仍按名字合并显示，不影响使用。
 
 也可以用 Wrangler：
 
 ```bash
+# 全新库
 npx wrangler d1 execute neon-combo --remote --file=./schema.sql
+# 已有表的库（增量升级）
+npx wrangler d1 execute neon-combo --remote --file=./migrations/001-add-region-device.sql
 ```
+
+两种脚本都只做 `CREATE ... IF NOT EXISTS` 或一次性 `ALTER`，重复执行新建部分不报错；但 `ALTER` 在列已存在时会报 `duplicate column name`，属正常提示，说明已经升级过了。
 
 ### 3. database_id 已写进配置
 
@@ -171,22 +206,26 @@ npx wrangler d1 execute neon-combo --remote --file=./schema.sql
 curl -s https://<项目名>.<子域>.workers.dev/api/scores
 ```
 
-返回 `{"scores":[]}` 即成功。玩一局，结算应显示「已上榜 · 第 N 名」，换设备打开还是同一份榜单。
+返回 `{"scores":[],"scope":"global","country":"CN"}` 即成功（`country` 是你自己的地区码）。玩一局，结算应显示「已上榜 · 第 N 名」，换设备打开还是同一份榜单。
 
 ### 接口说明
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/scores?limit=10` | 返回前 N 名（`limit` 1–50，默认 10） |
-| `GET` | `/api/scores?name=<名字>` | 额外返回该名字的 `best` / `plays` |
-| `POST` | `/api/scores` | 提交 `{ name, score, bestCombo, hits, misses }`，返回 `rank` 与最新榜单 |
+| `GET` | `/api/scores` | 全球前 50 名，每人只取最好一局 |
+| `GET` | `/api/scores?scope=region` | 本区前 50 名（地区由请求自动识别，不接受传参） |
+| `GET` | `/api/scores?player=<id>` | 额外返回 `player`：`best` / `plays` / `rank`（全球）/ `regionRank`（本区） |
+| `GET` | `/api/scores?limit=N` | 自定义条数，1–50，默认 50 |
+| `POST` | `/api/scores` | 提交 `{ name, score, bestCombo, hits, misses, playerId }`，返回 `rank`、`regionRank`、`best` 与最新榜单 |
+
+榜单里的每条记录形如 `{ name, tag, score, bestCombo, country, device, createdAt }`——`playerId` 不会返回给前端，只回传 4 位 `tag`。
 
 服务端校验（`src/scores.js`）：
 
 - 名字：去控制字符、压缩空格、按字符截断到 16、拒绝纯符号
 - 分数上限 20000、连击上限 400、命中/失误上限各 600
 - 一致性：`0 命中却有分`、`连击数 > 命中数`、`分数 ÷ 命中 > 250`（金环 + 倍率 5 的理论极值）都会被拒
-- 同名 3 秒内重复提交返回 `429`，避免刷新页面刷榜
+- 同一玩家 3 秒内重复提交返回 `429`，避免刷新页面刷榜
 - 错误码：`400 bad_name / bad_score / bad_combo / bad_counts / bad_json`、`429 too_fast`、`503 db_not_configured`、`500 insert_failed`
 
 > 这是**好友之间的排行榜**，不是严格反作弊系统：分数由前端上报，服务端只能挡住明显不合理的值。要更强的保证，得把整局逻辑搬到 Worker 里跑。
@@ -260,11 +299,14 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 | 倍率节奏与上限 | `CONFIG.comboStep` / `maxMultiplier` |
 | 评级分数线（S/A/B/C/D） | `public/assets/js/game-core.js` 的 `GRADES` |
 | 排行榜条数、校验上限 | `src/scores.js`（`LIMIT_DEFAULT`、`MAX_SCORE` 等） |
+| 榜单条数（前端） | `public/assets/js/game.js` 的 `BOARD_LIMIT` |
+| 设备归类规则 | `src/scores.js` 的 `detectDevice`（UA 正则） |
+| 玩家标签位数 | `src/scores.js` 的 `tagFor`（默认取前 4 位） |
 | 页面结构 / 新增视图 | `public/index.html` |
 | 主色、场地配色、深浅色 | `public/assets/css/style.css` 顶部 `:root` 与 `html[data-theme="dark"]` |
 | 站点图标 | `public/assets/favicon.svg` |
 | 安全头 | `public/_headers`（只加安全头，不加缓存） |
-| 表结构 | `schema.sql`（改完要在 D1 重新执行） |
+| 表结构 | `schema.sql`（全新库）+ `migrations/`（已有库增量升级） |
 | 新增 API 路由 | `src/index.js` 里加分支，再加到 `run_worker_first` |
 | Worker 项目名 / D1 绑定 | `wrangler.jsonc` |
 
@@ -276,7 +318,9 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 
 - **构建报错 `This project has a functions directory and static files in its root...`**：这是把仓库当 Pages 项目部署了。本项目已改成 Workers 结构（静态文件在 `public/`、API 在 `src/`），确认 Deploy command 是 `npx wrangler deploy`、且仓库里没有 `functions/` 目录。
 - **部署成功但打开是空白 / 404**：`assets.directory` 指错了。确认 `public/index.html` 存在，`wrangler.jsonc` 里是 `"directory": "./public"`。
-- **排行榜显示「离线模式」**：D1 没接好。检查 `wrangler.jsonc` 的 `d1_databases` → `binding` 是否为 `DB` → `database_id` 是否正确 → `schema.sql` 是否执行过。`curl .../api/scores` 返回 `503` 表示没有绑定，`500` 表示表不存在。
+- **排行榜显示「离线模式」**：D1 没接好。检查 `wrangler.jsonc` 的 `d1_databases` → `binding` 是否为 `DB` → `database_id` 是否正确 → 建表脚本是否执行过。`curl .../api/scores` 返回 `503` 表示没有绑定，`500` 表示表不存在或还是旧表结构（缺 `country` / `device` / `player_id` 三列，需执行 `migrations/001-add-region-device.sql`）。
+- **两个同名玩家分不开**：正常情况靠「地区 + 设备 + `#` 标签」区分。如果他们的标签也相同（极端概率），最直观的补充是让对方改名字；不建议靠加后缀机器码，那会暴露设备指纹。
+- **本区榜是空的**：说明这个地区还没有人提交成绩。地区由 Cloudflare 判定，本地预览或非 Cloudflare 环境会显示「未知地区」，这些记录会归到 `XX`。
 - **提交后没上榜**：开发者工具 Network 看 `/api/scores` 的 POST 响应码。`400` 是字段校验没过（看 `error`），`429` 是 3 秒内重复提交，`503` 是没绑定。
 - **部署到了别的域名**：`wrangler.jsonc` 的 `name` 与 Cloudflare 项目名不一致，改成一致再 push。
 - **名字被截断 / 存不进去**：上限 16 个字符（按字符算，不是字节），纯符号会被拒绝。
