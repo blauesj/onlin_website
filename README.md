@@ -12,7 +12,7 @@
 .
 ├── index.html              # 整站页面（所有文案都在这里）
 ├── 404.html                # 404 页，自包含样式，任意路径下都能显示
-├── _headers                # Cloudflare Pages 响应头（安全头 + 缓存）
+├── _headers                # Cloudflare Pages 响应头（仅安全头，不设缓存）
 ├── .gitignore
 ├── README.md
 └── assets/
@@ -112,6 +112,44 @@ git push -u origin main
 
 ---
 
+## 日常更新：改完网页怎么上线
+
+连了 Git 之后**没有传统服务器要上传文件**：改完代码推到 `main`，Cloudflare 自动重新部署。
+
+```bash
+cd <项目目录>
+
+# 1. 可选：先本地预览确认改动
+python -m http.server 8000
+
+# 2. 提交并推送
+git add .
+git commit -m "update: 修改首页文案"
+git push
+```
+
+流程：`git push` → GitHub 通知 Cloudflare → 拉取最新代码 → 构建（本项目无构建步骤）→ 切换到全球边缘节点。通常 **30 秒 ~ 2 分钟**生效，**域名、SSL、DNS 全部不用重新配置**。
+
+| 场景 | 怎么做 |
+| --- | --- |
+| 看进度 / 排错 | Pages 项目 → **Deployments**（部署），每次 push 一条记录，点开有日志和该次部署的独立 URL |
+| 先试后发 | 推到 `main` 以外的分支或开 PR，会生成独立预览地址，不影响正式站点；确认后再合并 |
+| 改出问题要退回 | 在部署记录里选中上一次成功的部署做 **Rollback**（回滚） |
+| 不想每次 push 都部署 | 项目 → **Settings → Builds → Branch control**，关掉 `Enable automatic production branch deployments`；之后改用 Wrangler 手动部署 |
+| 部署失败 | 旧版本会继续在线，站点不会挂；看构建日志修完再 push |
+
+> 注意：这不是字面意义的「实时」，有一分钟左右的构建延迟。若 Cloudflare 项目还没创建，push 只是更新了 GitHub 仓库，等项目创建时会自动用最新代码。
+
+### 为什么改完刷新就能看到新内容
+
+本项目**故意不设置任何自定义缓存**：`_headers` 里只放安全头，不给 `/assets/*` 或 `/*` 加 `Cache-Control`。Cloudflare Pages 默认对静态资源返回 `Cache-Control: public, max-age=0, must-revalidate` 并附带 `Etag`，浏览器每次都会回源校验，文件变了拿新的、没变返回 304。
+
+> 千万别加 `max-age=86400` 或 `s-maxage=604800` 这类规则：它会覆盖默认值，导致「部署成功但页面还是旧的」；`pages.dev` 又没有可清缓存的 zone，可能要等很久才恢复。若已加了长缓存，先删掉规则重新部署，再到自定义域名所在 zone 执行 `Purge Everything`。
+
+排查技巧：`Ctrl/Cmd + Shift + R` 强刷、开发者工具 Network 勾选 `Disable cache`、或直接打开该次部署的独立 URL 确认新构建本身是对的；也检查自定义域名所在 zone 的 Cache Rules 有没有缓存 HTML。
+
+---
+
 ## 备选：用 Wrangler 直接上传（不连 Git）
 
 ```bash
@@ -131,7 +169,7 @@ npx wrangler pages deploy . --project-name=yuguang-site
 | 作品分类 | `index.html` 中 `.filter` 的 `data-filter` 与 `.work-card` 的 `data-category` 保持一致 |
 | 联系邮箱 | `index.html` 中搜索 `hello@yuguang.studio`（`mailto:` 与 `#copy-email` 的 `data-email` 两处） |
 | 站点图标 | `assets/favicon.svg` |
-| 安全头 / 缓存策略 | `_headers` |
+| 安全头 | `_headers`（只加安全头，不要加缓存规则） |
 
 **替换作品缩略图**：目前用纯 CSS 渐变占位，不依赖任何图片。若要放真实图片，在 `assets/` 下新建 `img/` 目录，把 `.work-thumb` 里的 `<span>` 换成 `<img>`，并在 CSS 中补一条 `.work-thumb img { width:100%; height:100%; object-fit:cover; }`。注意 `_headers` 的 CSP 只允许 `img-src 'self' data:`，用本地图片无需改动；若改用外部图床，需把域名加入 CSP。
 
@@ -140,7 +178,7 @@ npx wrangler pages deploy . --project-name=yuguang-site
 ## 常见问题
 
 - **页面 404 / 样式丢失**：确认仓库根目录直接就是 `index.html`（不是嵌套了一层文件夹），且 Root directory 填的是 `/`。
-- **改了 CSS 但线上没变**：`_headers` 给 `/assets/*` 设了 1 天缓存，可在 Cloudflare 该次部署里点 **Retry deployment** 或强刷（Ctrl/Cmd + Shift + R）。
+- **改了代码但线上没变**：先看 `Deployments` 里这次 push 是否部署成功；成功后强刷（Ctrl/Cmd + Shift + R）。若仍不变，确认 `_headers` 没给 HTML 或资源加 `max-age` / `s-maxage`（本项目故意不加），并检查自定义域名所在 zone 的 Cache Rules 是否缓存了 HTML。详见「日常更新」。
 - **构建报错 `npm: command not found` / 找不到 build**：说明 Build command 没留空，按上表清空即可。
 - **GitHub Pages 也能用吗**：可以，Settings → Pages → Deploy from a branch → `main` / `root`，同样零构建。
 - **SSH 推送报 `Connection closed ... port 22` / `Connection timed out`**：部分网络会封 22 端口。在 `~/.ssh/config` 加入下面几行，即可继续用 `git@github.com:...` 形式的地址，自动走 GitHub 官方的 SSH over 443：

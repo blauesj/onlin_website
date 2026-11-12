@@ -7,6 +7,8 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'
 
-# 静态资源带指纹更新时，可自行给文件名加 hash 并启用 immutable
-/assets/*
-  Cache-Control: public, max-age=86400
+# 这里故意不设置任何 Cache-Control。
+# Pages 默认对静态资源返回 Cache-Control: public, max-age=0, must-revalidate 并附带 Etag，
+# 浏览器每次请求都会回源校验，改完代码一部署就能立刻拿到新文件；
+# 自行给 /assets/* 或 /* 加 max-age / s-maxage 反而会让部署成功却仍显示旧内容。
+# 官方建议：https://developers.cloudflare.com/pages/configuration/serving-pages/#caching-and-performance
