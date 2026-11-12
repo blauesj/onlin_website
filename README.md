@@ -4,7 +4,7 @@
 
 站点跑在 **Cloudflare Workers + 静态资源**（`assets`）上：静态文件由边缘节点直出，只有 `/api/*` 进 Worker。
 
-> 线上地址形如 `https://<Worker 项目名>.<你的子域>.workers.dev`。首次部署后还需要**创建 D1 数据库并把 ID 写进配置**，否则游戏能玩、但排行榜会显示「离线模式」，成绩只存本机。见下方「D1 排行榜配置」。
+> 线上地址形如 `https://<Worker 项目名>.<你的子域>.workers.dev`。D1 已绑定在 `wrangler.jsonc`（`binding: DB`），只需在数据库里**执行一次 `schema.sql` 建表**；表不存在时接口返回 500，游戏里会退成「离线模式」，成绩只存本机。见下方「D1 排行榜配置」。
 
 ---
 
@@ -123,8 +123,9 @@ npx wrangler dev        # 默认 http://localhost:8787，/api/* 与静态资源�
 curl -s https://<项目名>.<子域>.workers.dev/api/scores
 ```
 
-- 返回 `{"error":"db_not_configured","scores":[]}` → 部署成功，只是还没接 D1（正常，见下一节）
-- 返回 `{"scores":[]}` → D1 已接好
+- 返回 `{"scores":[]}` → 全部就绪
+- 返回 `500` → D1 绑定已生效，但还没执行 `schema.sql`（表不存在），见下一节
+- 返回 `{"error":"db_not_configured","scores":[]}` → 绑定没生效，检查 `wrangler.jsonc` 的 `d1_databases` 并确认这次部署用的是最新配置
 
 ---
 
@@ -144,24 +145,25 @@ curl -s https://<项目名>.<子域>.workers.dev/api/scores
 npx wrangler d1 execute neon-combo --remote --file=./schema.sql
 ```
 
-### 3. 把 database_id 写进配置
+### 3. database_id 已写进配置
 
-在数据库详情页复制 **Database ID**，然后在 `wrangler.jsonc` 里取消注释并填入：
+`wrangler.jsonc` 里已经绑定好了，无需再改：
 
 ```jsonc
 "d1_databases": [
   {
     "binding": "DB",
     "database_name": "neon-combo",
-    "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    "database_id": "ebc0b10e-fd9f-4cba-a8ae-0823f8e2b5d3"
   }
 ]
 ```
 
-提交并 push，构建完成后 D1 就生效了。
+换数据库时只改 `database_id`（顺便把 `database_name` 改成实际库名），然后 push，构建完成后生效。
 
 > ⚠️ **不要在 Dashboard 里单独加 D1 绑定**。Workers 以 `wrangler.jsonc` 为准，每次部署都会按配置同步绑定，Dashboard 手动加的会被覆盖掉。
 > `binding` 必须是 `DB`，代码里读的是 `env.DB`，填错会一直返回 503。
+> `database_name` 只影响 `wrangler d1` 系列命令（备份、执行 SQL）的默认目标，绑定时按 `database_id` 走，名字不一致不会导致部署失败——但建议保持一致，免得以后用 CLI 时对不上。
 
 ### 4. 验证
 

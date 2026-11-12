@@ -20,17 +20,18 @@
     "run_worker_first": ["/api/*"]
   },
 
+  // D1 数据库绑定：排行榜成绩走这里。
+  // 注意：Workers 以配置文件为准，Dashboard 里手动加的绑定会在下次部署时被覆盖。
+  // binding 必须是 DB —— src/scores.js 读的是 env.DB，改名会导致接口返回 503。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "neon-combo",
+      "database_id": "ebc0b10e-fd9f-4cba-a8ae-0823f8e2b5d3"
+    }
+  ],
+
   "observability": {
     "enabled": true
   }
-
-  // D1 建好之后启用下面这段（把 database_id 换成真实值）。
-  // 注意：Workers 以配置文件为准，Dashboard 里手动加的绑定会在下次部署时被覆盖。
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "neon-combo",
-  //     "database_id": "<创建 D1 后复制过来的 ID>"
-  //   }
-  // ]
 }
