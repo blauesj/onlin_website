@@ -1,10 +1,11 @@
 /* Worker 入口
    - /api/scores 交给 scores.js 处理（GET 读榜 / POST 提交）
    - 其余请求交给静态资源（ASSETS 绑定）
+   - scheduled：定时任务（每周清空排行榜），由 wrangler.jsonc 的 triggers.crons 触发
    与 wrangler.jsonc 的 assets.run_worker_first = ["/api/*"] 配合：
    只有 /api/* 先经过 Worker，静态文件仍然由边缘节点直出。 */
 
-import { handleGet, handlePost } from './scores.js';
+import { handleGet, handlePost, resetScores } from './scores.js';
 
 const SCORES_PATH = '/api/scores';
 
@@ -39,5 +40,19 @@ export default {
     /* 兜底：正常不会走到这里（静态资源优先），保留以保证直接访问 Worker 时的行为 */
     if (env && env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not Found', { status: 404 });
+  },
+
+  /* Cron Trigger：目前只有「每周清空榜单」这一个任务 */
+  async scheduled(event, env, ctx) {
+    const run = resetScores(env).then(function (result) {
+      if (result.ok) {
+        console.log('weekly reset: cleared ' + result.deleted + ' scores (cron=' + event.cron + ')');
+      } else {
+        console.error('weekly reset failed: ' + result.error + ' (cron=' + event.cron + ')');
+      }
+      return result;
+    });
+    if (ctx && ctx.waitUntil) ctx.waitUntil(run);
+    return run;
   }
 };

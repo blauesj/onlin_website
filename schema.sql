@@ -18,9 +18,9 @@ CREATE TABLE IF NOT EXISTS scores (
   misses     INTEGER NOT NULL DEFAULT 0,
   -- 地域：服务端从 Cloudflare 请求里自动识别（ISO 3166-1 alpha-2，未知为 XX）
   country    TEXT    NOT NULL DEFAULT 'XX',
-  -- 设备：服务端按 User-Agent 归类，取值 mobile / tablet / desktop
+  -- 已废弃：设备类型不再写入、也不再展示。保留该列只为兼容早期版本建过的表。
   device     TEXT    NOT NULL DEFAULT 'desktop',
-  -- 玩家标识：客户端本地随机生成，只用于区分同名玩家，不含个人信息
+  -- 玩家标识：服务端取访客 IP 做 SHA-256 后取前 16 位，不存明文 IP，只用于识别同一玩家
   player_id  TEXT,
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );

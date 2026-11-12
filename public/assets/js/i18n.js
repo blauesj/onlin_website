@@ -92,10 +92,7 @@
       'board.unknownRegion': '未知地区',
       'board.note.offline': '现在只显示这台设备上的成绩',
       'board.note.error': '暂时没连上，稍后点刷新试试',
-
-      'device.mobile': '手机',
-      'device.tablet': '平板',
-      'device.desktop': '电脑',
+      'board.reset': '每周一 00:00 重置',
 
       'rules.title': '怎么玩',
       'rules.1': '输入名字，开始后有 3 秒准备，然后计时 30 秒。',
@@ -185,10 +182,7 @@
       'board.unknownRegion': 'Unknown region',
       'board.note.offline': 'Showing scores from this device only',
       'board.note.error': 'Cannot load right now — try refresh',
-
-      'device.mobile': 'Phone',
-      'device.tablet': 'Tablet',
-      'device.desktop': 'Desktop',
+      'board.reset': 'Resets Mondays at 00:00 (UTC+8)',
 
       'rules.title': 'How to play',
       'rules.1': 'Enter a name, start, and get 3 seconds to prepare. Then the clock runs for 30.',

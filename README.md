@@ -29,15 +29,20 @@
 - 两个视角：**全球**（所有玩家）和**本区**（自动识别访客所在地区）
 - 侧栏顶部常驻「**我的排名**」卡片：全球名次、本区名次、个人最高分
 
-**同名玩家怎么区分**：名字允许重复，靠三样自动获取的信息区分，前端不用填任何额外内容。
+**同名玩家怎么区分**：名字允许重复，身份和地区都由服务端自动判断，前端不用填任何额外内容。
 
 | 信息 | 来源 | 展示 |
 | --- | --- | --- |
+| 玩家身份 | 服务端取访客 IP，SHA-256 后取前 16 位（不存明文 IP） | 名字后的 `#A3F9` 短标签 |
 | 地区 | 服务端读 `request.cf.country`（Cloudflare 提供，ISO 国家码） | 榜单第二行显示「中国 / 日本 / …」 |
-| 设备 | 服务端按 `User-Agent` 归类为 mobile / tablet / desktop | 显示「手机 / 平板 / 电脑」 |
-| 玩家标识 | 浏览器本地随机生成 16 位十六进制，存在 `localStorage` | 名字后的 `#A3F9` 短标签 |
 
-地区与设备都由**服务端**从请求里取，前端传了也不作数，所以既无法伪装地区，也不会上传任何个人信息；`#` 标签只用来在同名时区分和标记「你」，换设备会变成新的标签。
+同一网络下用同一个名字，换手机、换电脑都会认成同一个人，名次和最高分连在一起；同名但不同网络的两个玩家，靠 `#` 标签区分。同一 WiFi 下用不同名字的人各自独立成条，不会互相覆盖成绩。
+
+地区与身份都由**服务端**从请求里取，前端传了也不作数，所以既无法伪装地区，也不会上传个人信息——数据库里只有 IP 的哈希片段，没有明文 IP。
+
+> 因为身份基于公网出口 IP，公司、学校、咖啡馆这类共用出口下，同名的人会被合并成一条。要精确到设备得改回浏览器本地标识（`public/assets/js/game.js` 里生成、随请求提交）。
+
+**每周清空**：榜单由 Cloudflare 定时任务在每周一 00:00（北京时间）自动清零，配置见下方「每周清空排行榜」。
 
 ---
 
@@ -56,12 +61,12 @@
 │       ├── js/game.js          # 游戏主逻辑：生成目标、计时、音效、提交、排行榜
 │       └── favicon.svg         # 站点图标
 ├── src/
-│   ├── index.js                # Worker 入口：/api/scores 路由 + 其余交给 ASSETS
+│   ├── index.js                # Worker 入口：/api/scores 路由、scheduled 定时清空、其余交给 ASSETS
 │   └── scores.js               # 排行榜逻辑：GET 读榜 / POST 提交（含校验与节流）
 ├── wrangler.jsonc              # Workers 配置：项目名、入口、静态资源、D1 绑定
 ├── schema.sql                  # D1 建表脚本（全新数据库用）
 ├── migrations/
-│   └── 001-add-region-device.sql  # 增量升级：给已有表补 地域/设备/玩家标识
+│   └── 001-add-region-device.sql  # 增量升级：给早期版本建过的表补 地域/设备/玩家标识
 ├── .gitignore
 ├── .gitattributes
 └── README.md
@@ -167,7 +172,7 @@ curl -s https://<项目名>.<子域>.workers.dev/api/scores
 控制台 → D1 → 选中数据库 → Console / 控制台 → 粘贴 migrations/001-add-region-device.sql → Execute
 ```
 
-迁移会给旧表补上 `country` / `device` / `player_id` 三列并加索引；旧数据自动填成 `XX` / `desktop` / 空，仍按名字合并显示，不影响使用。
+迁移会给旧表补上 `country` / `device` / `player_id` 三列并加索引；旧数据自动填成 `XX` / `desktop` / 空，仍按名字合并显示，不影响使用。其中 `device` 现在只是历史遗留列，代码不再写入也不再展示，留着不影响任何功能。
 
 也可以用 Wrangler：
 
@@ -214,27 +219,73 @@ curl -s https://<项目名>.<子域>.workers.dev/api/scores
 | --- | --- | --- |
 | `GET` | `/api/scores` | 全球前 50 名，每人只取最好一局 |
 | `GET` | `/api/scores?scope=region` | 本区前 50 名（地区由请求自动识别，不接受传参） |
-| `GET` | `/api/scores?player=<id>` | 额外返回 `player`：`best` / `plays` / `rank`（全球）/ `regionRank`（本区） |
+| `GET` | `/api/scores?name=<名字>` | 额外返回 `player`：`best` / `plays` / `rank`（全球）/ `regionRank`（本区） |
 | `GET` | `/api/scores?limit=N` | 自定义条数，1–50，默认 50 |
-| `POST` | `/api/scores` | 提交 `{ name, score, bestCombo, hits, misses, playerId }`，返回 `rank`、`regionRank`、`best` 与最新榜单 |
+| `POST` | `/api/scores` | 提交 `{ name, score, bestCombo, hits, misses }`，返回 `rank`、`regionRank`、`best` 与最新榜单 |
 
-榜单里的每条记录形如 `{ name, tag, score, bestCombo, country, device, createdAt }`——`playerId` 不会返回给前端，只回传 4 位 `tag`。
+榜单里的每条记录形如 `{ name, tag, score, bestCombo, country, createdAt }`。玩家身份完全由服务端按 IP 推导，**前端既不传也不拿 `playerId`**，只回传 4 位 `tag` 用于展示。
 
 服务端校验（`src/scores.js`）：
 
 - 名字：去控制字符、压缩空格、按字符截断到 16、拒绝纯符号
 - 分数上限 20000、连击上限 400、命中/失误上限各 600
 - 一致性：`0 命中却有分`、`连击数 > 命中数`、`分数 ÷ 命中 > 250`（金环 + 倍率 5 的理论极值）都会被拒
-- 同一玩家 3 秒内重复提交返回 `429`，避免刷新页面刷榜
+- 同一个人 3 秒内重复提交返回 `429`，避免刷新页面刷榜
 - 错误码：`400 bad_name / bad_score / bad_combo / bad_counts / bad_json`、`429 too_fast`、`503 db_not_configured`、`500 insert_failed`
 
 > 这是**好友之间的排行榜**，不是严格反作弊系统：分数由前端上报，服务端只能挡住明显不合理的值。要更强的保证，得把整局逻辑搬到 Worker 里跑。
 
 ---
 
+## 每周清空排行榜（Cron Trigger）
+
+清空逻辑在 `src/index.js` 的 `scheduled` 里，调用 `src/scores.js` 的 `resetScores()` 执行 `DELETE FROM scores`；触发时间写在 `wrangler.jsonc`：
+
+```jsonc
+"triggers": {
+  "crons": ["0 16 * * 0"]
+}
+```
+
+Cron 表达式一律按 **UTC** 计，五个字段是 `分 时 日 月 周`，所以 `0 16 * * 0` = 周日 16:00 UTC = **每周一 00:00（北京时间 / UTC+8）**。
+
+### 部署后确认是否生效
+
+Workers 以 `wrangler.jsonc` 为准，push 之后 Cron 会自动创建，不需要在控制台点任何东西。想核对：
+
+```
+控制台 → Workers & Pages → 选中项目 → 设置 / Settings → 触发器 / Trigger Events
+```
+
+「Cron 触发器 / Cron Triggers」里应看到 `0 16 * * 0`。想改时间就在这里删掉旧的再加新的——但注意下次部署会用 `wrangler.jsonc` 覆盖回去，**长期改请改配置文件**。
+
+### 想换时间 / 关掉
+
+| 目标 | 改法 |
+| --- | --- |
+| 改成每天 00:00（北京时间） | `["0 16 * * *"]` |
+| 改成每周一 00:00 UTC（北京 08:00） | `["0 0 * * 1"]` |
+| 暂时不清理 | 删掉整个 `triggers` 字段，或 `"crons": []` |
+
+### 怎么验证它真的会清
+
+本地模拟一次定时触发（不需要等到周一）：
+
+```bash
+npx wrangler dev --test-scheduled
+# 另开一个终端，手动触发这个 cron
+curl "http://localhost:8787/__scheduled?cron=0+16+*+*+0"
+```
+
+线上可以看日志：控制台 → 项目 → **日志 / Logs**，每周一会有一条 `weekly reset: cleared N scores`（`observability` 已开启）。
+
+> 清空是**物理删除**，不留存档。想保留历史就在 `resetScores()` 里把 `DELETE` 换成归档到另一张表，例如 `INSERT INTO scores_archive SELECT * FROM scores`。
+
+---
+
 ## 多语言（中文 / English）
 
-站点内置 `zh` / `en` 两套文案（当前各 67 个 key），**无需构建、无需两套 HTML**。
+站点内置 `zh` / `en` 两套文案（当前各 77 个 key），**无需构建、无需两套 HTML**。
 
 ### 默认语言怎么选
 
@@ -300,7 +351,8 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 | 评级分数线（S/A/B/C/D） | `public/assets/js/game-core.js` 的 `GRADES` |
 | 排行榜条数、校验上限 | `src/scores.js`（`LIMIT_DEFAULT`、`MAX_SCORE` 等） |
 | 榜单条数（前端） | `public/assets/js/game.js` 的 `BOARD_LIMIT` |
-| 设备归类规则 | `src/scores.js` 的 `detectDevice`（UA 正则） |
+| 玩家身份的哈希长度 | `src/scores.js` 的 `playerIdFor`（默认取 SHA-256 前 16 位） |
+| 清空时间 | `wrangler.jsonc` 的 `triggers.crons`（UTC 时间） |
 | 玩家标签位数 | `src/scores.js` 的 `tagFor`（默认取前 4 位） |
 | 页面结构 / 新增视图 | `public/index.html` |
 | 主色、场地配色、深浅色 | `public/assets/css/style.css` 顶部 `:root` 与 `html[data-theme="dark"]` |
@@ -318,8 +370,8 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 
 - **构建报错 `This project has a functions directory and static files in its root...`**：这是把仓库当 Pages 项目部署了。本项目已改成 Workers 结构（静态文件在 `public/`、API 在 `src/`），确认 Deploy command 是 `npx wrangler deploy`、且仓库里没有 `functions/` 目录。
 - **部署成功但打开是空白 / 404**：`assets.directory` 指错了。确认 `public/index.html` 存在，`wrangler.jsonc` 里是 `"directory": "./public"`。
-- **排行榜显示「离线模式」**：D1 没接好。检查 `wrangler.jsonc` 的 `d1_databases` → `binding` 是否为 `DB` → `database_id` 是否正确 → 建表脚本是否执行过。`curl .../api/scores` 返回 `503` 表示没有绑定，`500` 表示表不存在或还是旧表结构（缺 `country` / `device` / `player_id` 三列，需执行 `migrations/001-add-region-device.sql`）。
-- **两个同名玩家分不开**：正常情况靠「地区 + 设备 + `#` 标签」区分。如果他们的标签也相同（极端概率），最直观的补充是让对方改名字；不建议靠加后缀机器码，那会暴露设备指纹。
+- **排行榜显示「离线模式」**：D1 没接好。检查 `wrangler.jsonc` 的 `d1_databases` → `binding` 是否为 `DB` → `database_id` 是否正确 → 建表脚本是否执行过。`curl .../api/scores` 返回 `503` 表示没有绑定，`500` 表示表不存在或还是旧表结构（缺 `country` / `player_id` 列，需执行 `migrations/001-add-region-device.sql`）。
+- **两个同名玩家分不开**：身份按 IP 哈希区分，同一网络下同名会被合并成一个人。这种情况让对方换个名字即可；不建议加设备指纹，那属于过度追踪。
 - **本区榜是空的**：说明这个地区还没有人提交成绩。地区由 Cloudflare 判定，本地预览或非 Cloudflare 环境会显示「未知地区」，这些记录会归到 `XX`。
 - **提交后没上榜**：开发者工具 Network 看 `/api/scores` 的 POST 响应码。`400` 是字段校验没过（看 `error`），`429` 是 3 秒内重复提交，`503` 是没绑定。
 - **部署到了别的域名**：`wrangler.jsonc` 的 `name` 与 Cloudflare 项目名不一致，改成一致再 push。

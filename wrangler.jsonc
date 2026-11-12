@@ -31,6 +31,13 @@
     }
   ],
 
+  // 定时任务：每周清空排行榜（src/index.js 的 scheduled → resetScores）
+  // Cron 一律按 UTC 计：周日 16:00 UTC = 周一 00:00（北京 / UTC+8）
+  // 想换时间改这串就行，五个字段依次是 分 时 日 月 周。
+  "triggers": {
+    "crons": ["0 16 * * 0"]
+  },
+
   "observability": {
     "enabled": true
   }

@@ -496,6 +496,7 @@ html[data-theme="dark"] .result-status.is-good { color: #63d99a; }
 
 .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .board-sub { margin-top: 10px; font-size: 12px; color: var(--text-faint); }
+.board-reset { margin-top: 3px; font-size: 11px; color: var(--text-faint); opacity: .8; }
 
 /* 全球 / 本区 切换 */
 .board-tabs {

@@ -15,7 +15,6 @@
     best: 'neoncombo-best',
     sound: 'neoncombo-sound',
     local: 'neoncombo-local-scores',
-    player: 'neoncombo-player',
     scope: 'neoncombo-scope',
     theme: 'yuguang-theme'
   };
@@ -177,10 +176,36 @@
     node.classList.add('is-bump');
   }
 
-  function setStatus(text, good) {
+  /* 结算状态行存「状态 + 参数」而不是成品文字：
+     切语言时按当前语言重新生成，不会残留旧语言。 */
+  var statusState = { kind: 'empty', rank: 0, regionRank: 0, gap: 0, good: false };
+
+  function statusText() {
+    var s = statusState;
+    if (s.kind === 'newBest') return t('result.newBest');
+    if (s.kind === 'saving') return t('status.saving');
+    if (s.kind === 'saved') {
+      var text = s.rank ? tf('status.saved', { rank: s.rank }) : t('status.savedNoRank');
+      if (s.regionRank && s.regionRank !== s.rank) {
+        text += tf('status.savedRegion', { rank: s.regionRank });
+      }
+      if (s.gap > 0) text += ' · ' + tf('result.gap', { n: formatScore(s.gap) });
+      return text;
+    }
+    if (s.kind === 'offline') return t('status.offline');
+    if (s.kind === 'failed') return t('status.failed');
+    return '';
+  }
+
+  function renderStatus() {
     if (!nodes.status) return;
-    nodes.status.textContent = text;
-    nodes.status.classList.toggle('is-good', !!good);
+    nodes.status.textContent = statusText();
+    nodes.status.classList.toggle('is-good', !!statusState.good);
+  }
+
+  function setStatus(next) {
+    statusState = next || { kind: 'empty', rank: 0, regionRank: 0, gap: 0, good: false };
+    renderStatus();
   }
 
   function flashHint(msg, isError) {
@@ -563,9 +588,9 @@
     nodes.gameBest.textContent = tf('game.bestValue', { n: Math.max(best, state.score) });
 
     if (isBest && state.score > 0) {
-      setStatus(t('result.newBest'), true);
+      setStatus({ kind: 'newBest', good: true });
     } else {
-      setStatus('', false);
+      setStatus({ kind: 'empty' });
     }
   }
 
@@ -597,28 +622,7 @@
     });
   }
 
-  /* ---------- 玩家标识：本机随机生成，只用来区分同名玩家 ---------- */
-  function randomId() {
-    var bytes = new Uint8Array(8);
-    if (window.crypto && window.crypto.getRandomValues) {
-      window.crypto.getRandomValues(bytes);
-    } else {
-      for (var k = 0; k < bytes.length; k++) bytes[k] = Math.floor(Math.random() * 256);
-    }
-    var out = '';
-    for (var i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2);
-    return out;
-  }
-
-  function playerId() {
-    var id = read(KEYS.player, '');
-    if (/^[0-9a-f]{8,40}$/.test(id)) return id;
-    id = randomId();
-    write(KEYS.player, id);
-    return id;
-  }
-
-  /* ---------- 地域 / 设备展示 ---------- */
+  /* ---------- 地域展示 ---------- */
   function regionName(code) {
     if (!code || code === 'XX') return t('board.unknownRegion');
     try {
@@ -629,9 +633,9 @@
     }
   }
 
-  function deviceName(device) {
-    var key = device === 'mobile' || device === 'tablet' ? device : 'desktop';
-    return t('device.' + key);
+  /* 当前玩家的名字：优先本局输入，其次上次记住的 */
+  function myName() {
+    return state.name || read(KEYS.name, '');
   }
 
   function localBoard() {
@@ -669,6 +673,7 @@
   function renderBoard() {
     var list = (lastBoard || []).slice(0, BOARD_LIMIT);
     var myTag = me && me.tag ? String(me.tag).toUpperCase() : '';
+    var mineName = (me && me.name) || myName();
 
     syncBoardChrome();
 
@@ -682,7 +687,8 @@
 
     list.forEach(function (row, index) {
       var tag = row.tag ? String(row.tag).toUpperCase() : '';
-      var isMe = myTag ? tag === myTag : (state.name && row.name === state.name);
+      /* 同一网络同一名字才算自己：同名不同网络靠 tag 区分，同网络不同名字不是同一个人 */
+      var isMe = mineName && row.name === mineName && (!myTag || !tag || tag === myTag);
 
       var li = document.createElement('li');
       li.className = 'board-row' + (index === 0 ? ' is-top' : '') + (isMe ? ' is-me' : '');
@@ -711,14 +717,11 @@
       }
       name.appendChild(line);
 
-      /* 地域 + 设备：同名玩家靠这一行区分 */
-      if (row.country || row.device) {
+      /* 地域：同名玩家靠这一行区分 */
+      if (row.country) {
         var meta = document.createElement('span');
         meta.className = 'board-meta';
-        var parts = [];
-        if (row.country) parts.push(regionName(row.country));
-        if (row.device) parts.push(deviceName(row.device));
-        meta.textContent = parts.join(' · ');
+        meta.textContent = regionName(row.country);
         name.appendChild(meta);
       }
 
@@ -757,7 +760,9 @@
     var opts = options || {};
     if (!opts.silent) nodes.boardNote.hidden = true;
 
-    var url = '/api/scores?scope=' + lastScope + '&player=' + encodeURIComponent(playerId());
+    var url = '/api/scores?scope=' + lastScope;
+    var nm = myName();
+    if (nm) url += '&name=' + encodeURIComponent(nm);
 
     return requestJson(url).then(function (data) {
       lastBoard = data && data.scores ? data.scores : [];
@@ -776,17 +781,17 @@
     });
   }
 
-  function gapHint(res) {
-    if (!res || !res.scores || !res.rank || res.rank <= 1) return '';
+  function gapAmount(res) {
+    if (!res || !res.scores || !res.rank || res.rank <= 1) return 0;
     var above = res.scores[res.rank - 2];
     var best = Number(res.best) || state.score;
-    if (!above || Number(above.score) <= best) return '';
-    return tf('result.gap', { n: formatScore(Number(above.score) - best) });
+    if (!above || Number(above.score) <= best) return 0;
+    return Number(above.score) - best;
   }
 
   function submitScore() {
     if (state.score <= 0) return;
-    setStatus(t('status.saving'), false);
+    setStatus({ kind: 'saving', good: false });
 
     requestJson('/api/scores', {
       method: 'POST',
@@ -795,16 +800,16 @@
         score: state.score,
         bestCombo: state.bestCombo,
         hits: state.hits,
-        misses: state.misses,
-        playerId: playerId()
+        misses: state.misses
       })
     }).then(function (res) {
-      var saved = res && res.rank ? tf('status.saved', { rank: res.rank }) : t('status.savedNoRank');
-      if (res && res.regionRank && res.regionRank !== res.rank) {
-        saved += tf('status.savedRegion', { rank: res.regionRank });
-      }
-      var gap = gapHint(res);
-      setStatus(gap ? saved + ' · ' + gap : saved, true);
+      setStatus({
+        kind: 'saved',
+        rank: (res && res.rank) || 0,
+        regionRank: (res && res.regionRank) || 0,
+        gap: gapAmount(res),
+        good: true
+      });
 
       me = {
         name: state.name,
@@ -812,8 +817,7 @@
         best: (res && Number(res.best)) || state.score,
         rank: (res && res.rank) || 0,
         regionRank: (res && res.regionRank) || 0
-      };
-      lastBoard = res && res.scores ? res.scores : lastBoard;
+      };      lastBoard = res && res.scores ? res.scores : lastBoard;
       lastCountry = (res && res.country) || lastCountry;
       lastScope = 'global';
       write(KEYS.scope, lastScope);
@@ -828,7 +832,7 @@
         misses: state.misses,
         createdAt: new Date().toISOString()
       });
-      setStatus(t('status.offline'), false);
+      setStatus({ kind: 'offline', good: false });
       loadBoard({ silent: true });
     });
   }
@@ -933,6 +937,7 @@
       if (state.phase === 'result') {
         nodes.gradeText.textContent = t('grade.' + nodes.grade.getAttribute('data-grade') + '.text');
       }
+      renderStatus();
       renderBoard();
       renderMe();
       if (nodes.boardNote && !nodes.boardNote.hidden) {
