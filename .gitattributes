@@ -1,0 +1,3 @@
+# 统一使用 LF 换行，避免 Windows CRLF 影响 Cloudflare Pages 的
+# _headers / _redirects 等配置文件解析
+* text=auto eol=lf
