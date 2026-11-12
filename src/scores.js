@@ -70,8 +70,7 @@ const RANK_SQL = `SELECT name, score, best_combo AS bestCombo, created_at AS cre
                    ORDER BY score DESC, created_at ASC
                    LIMIT ?1`;
 
-export async function onRequestGet(context) {
-  const { request, env } = context;
+export async function handleGet(request, env) {
   if (!env || !env.DB) return json({ error: 'db_not_configured', scores: [] }, 503);
 
   const url = new URL(request.url);
@@ -99,8 +98,7 @@ export async function onRequestGet(context) {
   }
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
+export async function handlePost(request, env) {
   if (!env || !env.DB) return json({ error: 'db_not_configured' }, 503);
 
   let payload;

@@ -1,0 +1,36 @@
+// Cloudflare Workers 配置（静态资源 + API）
+// 文档：https://developers.cloudflare.com/workers/static-assets/
+//
+// ⚠️ name 必须与 Cloudflare 上的 Worker 项目名完全一致，
+//    否则 wrangler deploy 会部署到另一个（新建的）Worker 上。
+{
+  "name": "onlin-website",
+  "compatibility_date": "2026-11-12",
+  "main": "src/index.js",
+  "upload_source_maps": true,
+
+  "assets": {
+    // 纯静态文件都在 public/，URL 路径与目录结构一一对应
+    "directory": "./public",
+    // 让 Worker 脚本可以用 env.ASSETS.fetch() 兜底
+    "binding": "ASSETS",
+    // 找不到文件时返回 public/404.html
+    "not_found_handling": "404-page",
+    // 只有 /api/* 先经过 Worker，其余静态资源由边缘节点直出
+    "run_worker_first": ["/api/*"]
+  },
+
+  "observability": {
+    "enabled": true
+  }
+
+  // D1 建好之后启用下面这段（把 database_id 换成真实值）。
+  // 注意：Workers 以配置文件为准，Dashboard 里手动加的绑定会在下次部署时被覆盖。
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "neon-combo",
+  //     "database_id": "<创建 D1 后复制过来的 ID>"
+  //   }
+  // ]
+}
