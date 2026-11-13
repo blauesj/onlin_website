@@ -94,7 +94,7 @@
       'board.unknownRegion': '未知地区',
       'board.note.offline': '现在只显示这台设备上的成绩',
       'board.note.error': '暂时没连上，稍后点刷新试试',
-      'board.reset': '每周一 00:00 重置',
+      'board.reset': '每周一 00:00 重置（美东）',
 
       'rules.title': '怎么玩',
       'rules.1': '输入名字，开始后有 3 秒准备，然后计时 30 秒。',
@@ -106,7 +106,7 @@
       'about.title': '霓虹连击：一个 30 秒就能玩完的连击小游戏',
       'about.lead': '霓虹连击（NEON COMBO）是一个打开网页就能玩的 30 秒连击点击小游戏，不用注册也不用下载。目标只有一个：在倒计时结束前点掉所有发光的目标，连续命中会不断叠加倍率，漏掉一个连击就归零。',
       'about.p2': '每命中一次得 10 分，连击每满 5 次提升一档倍率，最高 ×5；金色圆环额外加 50 分并延长 1 秒。点空或让目标超时消失都会让连击清零，所以稳住节奏比盲目快点得分更高。',
-      'about.p3': '一局结束成绩自动上传，所有人都用同一套规则。排行榜分全球和本区两个视角，各显示前 50 名，并单独标出你自己的排名；同名玩家会按所在地区区分，不会互相覆盖成绩。榜单每周一 00:00（UTC+8）清空，然后重新开始累计。',
+      'about.p3': '一局结束成绩自动上传，所有人都用同一套规则。排行榜分全球和本区两个视角，各显示前 50 名，并单独标出你自己的排名；同名玩家会按所在地区区分，不会互相覆盖成绩。榜单每周一 00:00（美东时间 ET）清空，然后重新开始累计。',
       'about.p4': '手机、平板和电脑浏览器都能直接玩，横屏竖屏都支持。单局只要 30 秒，等电梯的工夫就能刷一局。',
 
       'about.spec.title': '规则明细',
@@ -123,7 +123,7 @@
       'about.spec.board.k': '排行榜',
       'about.spec.board.v': '前 50 名，全球 / 本区两个视角',
       'about.spec.reset.k': '重置周期',
-      'about.spec.reset.v': '每周一 00:00（UTC+8）',
+      'about.spec.reset.v': '每周一 00:00（美东时间 ET）',
       'about.spec.price.k': '费用',
       'about.spec.price.v': '免费，不需要注册',
 
@@ -138,7 +138,7 @@
       'faq.q3': '分数是怎么算出来的？',
       'faq.a3': '每次命中先拿 10 分，再乘以当前倍率；倍率由连击数决定，每满 5 次升一档，最高 ×5。金色圆环另外加 50 分。所以连续命中比快速乱点的得分高得多。',
       'faq.q4': '排行榜多久清空一次？',
-      'faq.a4': '每周一 00:00（北京时间 UTC+8）清空一次，全球榜和本区榜同时重置，然后重新累计。',
+      'faq.a4': '每周一 00:00（美东时间 ET）清空一次，全球榜和本区榜同时重置，然后重新累计。',
       'faq.q5': '手机上能玩吗？',
       'faq.a5': '能。页面按触屏操作设计，手机、平板、电脑浏览器都能直接玩，横屏竖屏都支持，也不需要安装任何东西。',
       'faq.q6': '玩完没有上榜是什么原因？',
@@ -231,7 +231,7 @@
       'board.unknownRegion': 'Unknown region',
       'board.note.offline': 'Showing scores from this device only',
       'board.note.error': 'Cannot load right now — try refresh',
-      'board.reset': 'Resets Mondays at 00:00 (UTC+8)',
+      'board.reset': 'Resets Mondays at 00:00 (ET)',
 
       'rules.title': 'How to play',
       'rules.1': 'Enter a name, start, and get 3 seconds to prepare. Then the clock runs for 30.',
@@ -243,7 +243,7 @@
       'about.title': 'NEON COMBO: a combo game you can finish in 30 seconds',
       'about.lead': 'NEON COMBO is a 30-second tap-and-combo browser game you can play instantly — no download, no sign-up. There is one goal: clear every glowing target before the countdown ends. Each hit extends your streak; miss one and it resets to zero.',
       'about.p2': 'Every hit scores 10 points times your current combo tier, which climbs one step per 5 hits and caps at ×5. Gold rings add 50 points and one extra second. A stray tap, or letting a target expire, wipes the streak — so a steady rhythm beats tapping blindly.',
-      'about.p3': 'Scores upload automatically when a round ends, and everyone plays the same rules. The leaderboard has two views — global and regional — each showing the top 50 with your own rank called out separately. Players who pick the same nickname are separated by region, so neither overwrites the other. The board is wiped every Monday at 00:00 (UTC+8) and a new round begins.',
+      'about.p3': 'Scores upload automatically when a round ends, and everyone plays the same rules. The leaderboard has two views — global and regional — each showing the top 50 with your own rank called out separately. Players who pick the same nickname are separated by region, so neither overwrites the other. The board is wiped every Monday at 00:00 US Eastern Time and a new round begins.',
       'about.p4': 'It runs in any phone, tablet or desktop browser, in either orientation. A round takes 30 seconds — roughly the time you spend waiting for a lift.',
 
       'about.spec.title': 'Rules at a glance',
@@ -260,7 +260,7 @@
       'about.spec.board.k': 'Leaderboard',
       'about.spec.board.v': 'Top 50, global and regional views',
       'about.spec.reset.k': 'Reset cycle',
-      'about.spec.reset.v': 'Mondays 00:00 (UTC+8)',
+      'about.spec.reset.v': 'Mondays 00:00 (ET)',
       'about.spec.price.k': 'Price',
       'about.spec.price.v': 'Free, no account required',
 
@@ -275,7 +275,7 @@
       'faq.q3': 'How is the score calculated?',
       'faq.a3': 'Each hit is worth 10 points multiplied by your current combo tier. The tier is driven by the streak: one step every 5 hits, up to ×5. Gold rings add another 50. Chaining hits therefore scores far more than clicking quickly at random.',
       'faq.q4': 'How often does the leaderboard reset?',
-      'faq.a4': 'Every Monday at 00:00 (UTC+8). The global and regional boards are both cleared at that moment and start counting again from zero.',
+      'faq.a4': 'Every Monday at 00:00 US Eastern Time (ET). The global and regional boards are both cleared at that moment and start counting again from zero.',
       'faq.q5': 'Does it work on a phone?',
       'faq.a5': 'Yes. The page is built for touch and runs in phone, tablet and desktop browsers, in either orientation, with nothing to install.',
       'faq.q6': 'Why did my score not appear on the leaderboard?',

@@ -15,8 +15,8 @@
    地域由服务端从 Cloudflare 的 request.cf.country 自动识别，前端传了也不作数。
 
    D1 绑定名为 DB（见 wrangler.jsonc）。
-   每周一 00:00（北京时间）由 Cron Trigger 调用 resetScores() 清空榜单，
-   配置见 wrangler.jsonc 的 triggers.crons 与 README。
+   每周一 00:00（美东时间 / America/New_York）由 Cron Trigger 调用 resetScores() 清空榜单，
+   具体时刻由 src/index.js 的 isResetMoment() 判断；配置见 wrangler.jsonc 的 triggers.crons 与 README。
    ============================================================ */
 
 const LIMIT_DEFAULT = 50;

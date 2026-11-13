@@ -13,7 +13,7 @@
 - 断连条件：点空，或目标超时消失。
 - 排行榜：分「全球」与「本区」两个视角，各显示前 50 名，并单独显示当前玩家的排名。
 - 同名处理：同名玩家按所在地区区分，成绩互不覆盖。
-- 重置周期：每周一 00:00（UTC+8，北京时间）清空一次。
+- 重置周期：每周一 00:00（美东时间，ET / America/New_York）清空一次，夏令时切换时也按当地时钟走。
 - 费用：完全免费，无需注册或安装。
 - 平台：手机、平板、电脑的主流浏览器，横竖屏均可。
 
@@ -28,7 +28,7 @@
 - **需要注册或下载吗？** 不需要。输入昵称即可开始，成绩只与该昵称绑定。
 - **排行榜上有人和我同名怎么办？** 同名玩家按所在地区自动区分，双方各自保留成绩。
 - **分数怎么算？** 每次命中 10 分乘以当前倍率，倍率每 5 次连击升一档（最高 ×5），金环另加 50 分。
-- **排行榜多久清空？** 每周一 00:00（UTC+8），全球榜与本区榜同时重置。
+- **排行榜多久清空？** 每周一 00:00（美东时间 ET），全球榜与本区榜同时重置。
 - **手机上能玩吗？** 能，页面按触屏操作设计，无需安装。
 - **为什么某局没上榜？** 成绩先保存在本机；隐私模式、断网或排行榜暂不可用时可能只留在本地，联网后刷新排行榜即可。
 
@@ -42,7 +42,7 @@
 - Streak breaks on a stray tap or a target timing out.
 - Leaderboards: global and regional views, top 50 each, with your own rank shown separately.
 - Same nickname: players are separated by region, so scores never overwrite each other.
-- Reset: every Monday 00:00 (UTC+8).
+- Reset: every Monday 00:00 US Eastern Time (America/New_York, DST-aware).
 - Price: free, no account required.
 
 ## 说明

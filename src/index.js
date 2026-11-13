@@ -9,6 +9,37 @@ import { handleGet, handlePost, resetScores } from './scores.js';
 
 const SCORES_PATH = '/api/scores';
 
+/* ---------- 清空时机 ----------
+   cron 每小时跑一次（见 wrangler.jsonc），这里判断是不是「美东时间周一 00:00」。
+   不把周一凌晨直接写死成某个 UTC 小时，是因为北美有夏令时：
+     · 写死 04:00 UTC → 夏天是周一 00:00（EDT），冬天变成周日 23:00（EST）
+     · 写死 05:00 UTC → 冬天是周一 00:00（EST），夏天变成周一 01:00（EDT）
+   交给 Intl 按地区换算，页面上承诺的「每周一 00:00（美东时间）」才永远成立。
+   想换时区只改 RESET_ZONE，想换时刻只改下面的 weekday / hour 判断。 */
+const RESET_ZONE = 'America/New_York';
+const RESET_WEEKDAY = 'Mon';
+const RESET_HOUR = '00';
+
+export function isResetMoment(date) {
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: RESET_ZONE,
+      weekday: 'short',
+      hour: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date);
+  } catch (e) {
+    /* 拿不到时区数据时宁可不删，也不要清错时间 */
+    return false;
+  }
+  const pick = (type) => {
+    const hit = parts.find((p) => p.type === type);
+    return hit ? hit.value : '';
+  };
+  return pick('weekday') === RESET_WEEKDAY && pick('hour') === RESET_HOUR;
+}
+
 function json(body, status) {
   return new Response(JSON.stringify(body), {
     status: status || 200,
@@ -42,11 +73,14 @@ export default {
     return new Response('Not Found', { status: 404 });
   },
 
-  /* Cron Trigger：目前只有「每周清空榜单」这一个任务 */
+  /* Cron Trigger：cron 每小时触发一次，只有命中「美东周一 00:00」那一小时才清空 */
   async scheduled(event, env, ctx) {
+    const at = new Date(event && event.scheduledTime ? event.scheduledTime : Date.now());
+    if (!isResetMoment(at)) return { skipped: true };
+
     const run = resetScores(env).then(function (result) {
       if (result.ok) {
-        console.log('weekly reset: cleared ' + result.deleted + ' scores (cron=' + event.cron + ')');
+        console.log('weekly reset: cleared ' + result.deleted + ' scores (at=' + at.toISOString() + ', cron=' + event.cron + ')');
       } else {
         console.error('weekly reset failed: ' + result.error + ' (cron=' + event.cron + ')');
       }

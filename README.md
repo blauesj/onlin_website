@@ -42,7 +42,7 @@
 
 > 因为身份基于公网出口 IP，公司、学校、咖啡馆这类共用出口下，同名的人会被合并成一条。要精确到设备得改回浏览器本地标识（`public/assets/js/game.js` 里生成、随请求提交）。
 
-**每周清空**：榜单由 Cloudflare 定时任务在每周一 00:00（北京时间）自动清零，配置见下方「每周清空排行榜」。
+**每周清空**：榜单由 Cloudflare 定时任务在每周一 00:00（美东时间）自动清零，配置见下方「每周清空排行榜」。
 
 ---
 
@@ -250,15 +250,25 @@ curl -s https://<项目名>.<子域>.workers.dev/api/scores
 
 ## 每周清空排行榜（Cron Trigger）
 
-清空逻辑在 `src/index.js` 的 `scheduled` 里，调用 `src/scores.js` 的 `resetScores()` 执行 `DELETE FROM scores`；触发时间写在 `wrangler.jsonc`：
+清空逻辑在 `src/index.js` 的 `scheduled` 里，调用 `src/scores.js` 的 `resetScores()` 执行 `DELETE FROM scores`；触发频率写在 `wrangler.jsonc`：
 
 ```jsonc
 "triggers": {
-  "crons": ["0 16 * * 0"]
+  "crons": ["0 * * * *"]
 }
 ```
 
-Cron 表达式一律按 **UTC** 计，五个字段是 `分 时 日 月 周`，所以 `0 16 * * 0` = 周日 16:00 UTC = **每周一 00:00（北京时间 / UTC+8）**。
+**cron 每小时跑一次，但只有「美东时间周一 00:00」这一小时才真的清空**，判断在 `src/index.js` 的 `isResetMoment()`：
+
+```js
+const RESET_ZONE = 'America/New_York';   // 换时区改这里
+const RESET_WEEKDAY = 'Mon';             // 换星期改这里
+const RESET_HOUR = '00';                 // 换时刻改这里（24 小时制，两位）
+```
+
+为什么不在 cron 里直接写一个固定的 UTC 时间：北美有夏令时。写死 `0 4 * * 1` 会在冬令时变成周日 23:00，写死 `0 5 * * 1` 又会在夏令时变成周一 01:00，页面上承诺的「每周一 00:00（美东）」就有一半时间是错的。交给 `Intl` 按 `America/New_York` 换算，夏令时切换那一周也不会偏。
+
+> 代价是每周多 167 次空转（每次只做一次时间判断就返回），对免费额度可以忽略。
 
 ### 部署后确认是否生效
 
@@ -268,31 +278,36 @@ Workers 以 `wrangler.jsonc` 为准，push 之后 Cron 会自动创建，不需�
 控制台 → Workers & Pages → 选中项目 → 设置 / Settings → 触发器 / Trigger Events
 ```
 
-「Cron 触发器 / Cron Triggers」里应看到 `0 16 * * 0`。想改时间就在这里删掉旧的再加新的——但注意下次部署会用 `wrangler.jsonc` 覆盖回去，**长期改请改配置文件**。
+「Cron 触发器 / Cron Triggers」里应看到 `0 * * * *`。想改就在这里删掉旧的再加新的——但注意下次部署会用 `wrangler.jsonc` 覆盖回去，**长期改请改配置文件**。
 
 ### 想换时间 / 关掉
 
 | 目标 | 改法 |
 | --- | --- |
-| 改成每天 00:00（北京时间） | `["0 16 * * *"]` |
-| 改成每周一 00:00 UTC（北京 08:00） | `["0 0 * * 1"]` |
+| 换时区（比如美西） | `src/index.js` 的 `RESET_ZONE` 改成 `America/Los_Angeles` |
+| 换到周一 20:00（美东） | `RESET_HOUR` 改成 `'20'` |
+| 换到周日清 | `RESET_WEEKDAY` 改成 `'Sun'` |
 | 暂时不清理 | 删掉整个 `triggers` 字段，或 `"crons": []` |
 
-### 怎么验证它真的会清
-
-本地模拟一次定时触发（不需要等到周一）：
+### 想立刻清一次（不等周一）
 
 ```bash
-npx wrangler dev --test-scheduled
-# 另开一个终端，手动触发这个 cron
-curl "http://localhost:8787/__scheduled?cron=0+16+*+*+0"
+npx wrangler d1 execute neon-combo --remote --command "DELETE FROM scores;"
 ```
 
-线上可以看日志：控制台 → 项目 → **日志 / Logs**，每周一会有一条 `weekly reset: cleared N scores`（`observability` 已开启）。
+### 怎么验证判断逻辑对不对
 
-> 清空是**物理删除**，不留存档。想保留历史就在 `resetScores()` 里把 `DELETE` 换成归档到另一张表，例如 `INSERT INTO scores_archive SELECT * FROM scores`。
+`isResetMoment()` 是导出的纯函数，可以直接用 node 跑，不用连 Cloudflare：
 
----
+```bash
+node -e "import('./src/index.js').then(({isResetMoment})=>{
+  console.log(isResetMoment(new Date('2026-11-16T05:00:00Z')));  // 冬令时 周一 00:00 → true
+  console.log(isResetMoment(new Date('2026-07-13T04:00:00Z')));  // 夏令时 周一 00:00 → true
+  console.log(isResetMoment(new Date('2026-07-13T05:00:00Z')));  // 夏令时 周一 01:00 → false
+})"
+```
+
+> `npx wrangler dev --test-scheduled` 也能手动触发 `scheduled`，但因为有时区判断，不在「美东周一 00:00」那一小时时它只会返回 `{ skipped: true }`，不会删数据。
 
 ## 多语言（中文 / English）
 
@@ -341,7 +356,7 @@ curl "http://localhost:8787/__scheduled?cron=0+16+*+*+0"
 
 ### GEO 部分的取舍
 
-- **给结论，不给形容词。** 正文第一句就是定义（「霓虹连击是一个 30 秒的连击点击小游戏」），后面每条都带具体数字（+10 / ×5 / +50 / 前 50 名 / 每周一 00:00 UTC+8），模型引用时不需要再推理。
+- **给结论，不给形容词。** 正文第一句就是定义（「霓虹连击是一个 30 秒的连击点击小游戏」），后面每条都带具体数字（+10 / ×5 / +50 / 前 50 名 / 每周一 00:00 美东时间），模型引用时不需要再推理。
 - **事实只写一遍。** 数字写在 `i18n.js` 的 `about.*` / `faq.*`，`llms.txt` 与 JSON-LD 是它的摘要。改规则时三处要一起改，否则会出现「页面写 ×5、llms.txt 写 ×3」这种自相矛盾。
 - **问答用 `<details>` 折叠。** 内容仍在 HTML 里能被抓取，但不会把首屏撑长。
 - **`robots.txt` 显式列出 AI 爬虫**（GPTBot、ClaudeBot、PerplexityBot、Google-Extended 等），避免被平台默认策略挡掉。
@@ -423,7 +438,7 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 | 排行榜条数、校验上限 | `src/scores.js`（`LIMIT_DEFAULT`、`MAX_SCORE` 等） |
 | 榜单条数（前端） | `public/assets/js/game.js` 的 `BOARD_LIMIT` |
 | 玩家身份的哈希长度 | `src/scores.js` 的 `playerIdFor`（默认取 SHA-256 前 16 位） |
-| 清空时间 | `wrangler.jsonc` 的 `triggers.crons`（UTC 时间） |
+| 清空时间 / 时区 | `src/index.js` 的 `isResetMoment()`（`RESET_ZONE` / `RESET_WEEKDAY` / `RESET_HOUR`），cron 保持每小时即可 |
 | 玩家标签位数 | `src/scores.js` 的 `tagFor`（默认取前 4 位） |
 | 页面结构 / 新增视图 | `public/index.html` |
 | 页面下方介绍区与问答的文案 | `public/assets/js/i18n.js` 的 `about.*` / `faq.*`（同时记得同步 `public/llms.txt`） |
