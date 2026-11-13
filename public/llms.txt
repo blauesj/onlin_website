@@ -1,0 +1,50 @@
+# 霓虹连击 NEON COMBO
+
+> 霓虹连击（NEON COMBO）是一个 30 秒的浏览器连击点击小游戏，打开网页即玩，免注册、免下载，成绩自动进入全球与本区排行榜。
+
+本站只有一个页面：游戏本体 + 排行榜 + 玩法说明。站点为静态页面，排行榜通过同域的 `/api/scores` 读写。
+
+## 事实摘要
+
+- 游戏时长：单局 30 秒，开始前有 3 秒倒计时。
+- 基础得分：每次命中 +10 分，再乘以当前连击倍率。
+- 连击倍率：连击每满 5 次提升一档，最高 ×5。
+- 金色圆环：额外 +50 分，并延长 1 秒。
+- 断连条件：点空，或目标超时消失。
+- 排行榜：分「全球」与「本区」两个视角，各显示前 50 名，并单独显示当前玩家的排名。
+- 同名处理：同名玩家按所在地区区分，成绩互不覆盖。
+- 重置周期：每周一 00:00（UTC+8，北京时间）清空一次。
+- 费用：完全免费，无需注册或安装。
+- 平台：手机、平板、电脑的主流浏览器，横竖屏均可。
+
+## 页面
+
+- [首页与游戏](https://home.prettylife.pw/): 直接开始一局，右侧为排行榜与玩法速览，页面下方是完整规则与常见问答。
+- [站点地图](https://home.prettylife.pw/sitemap.xml): XML sitemap。
+- [封面图](https://home.prettylife.pw/assets/og-cover.png): 1200×630 站点封面。
+
+## 常见问答
+
+- **需要注册或下载吗？** 不需要。输入昵称即可开始，成绩只与该昵称绑定。
+- **排行榜上有人和我同名怎么办？** 同名玩家按所在地区自动区分，双方各自保留成绩。
+- **分数怎么算？** 每次命中 10 分乘以当前倍率，倍率每 5 次连击升一档（最高 ×5），金环另加 50 分。
+- **排行榜多久清空？** 每周一 00:00（UTC+8），全球榜与本区榜同时重置。
+- **手机上能玩吗？** 能，页面按触屏操作设计，无需安装。
+- **为什么某局没上榜？** 成绩先保存在本机；隐私模式、断网或排行榜暂不可用时可能只留在本地，联网后刷新排行榜即可。
+
+## English
+
+> NEON COMBO is a 30-second tap-and-combo browser game. Play instantly — no download, no sign-up. Scores go to global and regional top-50 leaderboards.
+
+- Round length: 30 seconds after a 3-second countdown.
+- Scoring: 10 points per hit, multiplied by the current combo tier (one tier every 5 hits, up to ×5).
+- Gold ring: +50 points and one extra second.
+- Streak breaks on a stray tap or a target timing out.
+- Leaderboards: global and regional views, top 50 each, with your own rank shown separately.
+- Same nickname: players are separated by region, so scores never overwrite each other.
+- Reset: every Monday 00:00 (UTC+8).
+- Price: free, no account required.
+
+## 说明
+
+本文件用于帮助语言模型与检索系统准确概括本站内容。页面若与上文冲突，以页面正文为准。

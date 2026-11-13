@@ -51,15 +51,26 @@
 ```
 .
 ├── public/                     # ← 静态资源目录（wrangler.jsonc 的 assets.directory）
-│   ├── index.html              # 游戏主页：开始 / 游戏中 / 结算 三个视图 + 侧栏排行榜
+│   ├── index.html              # 游戏主页：三个视图 + 侧栏排行榜 + 页尾介绍/问答区
 │   ├── 404.html                # 404 页，中英双语、样式自包含
+│   ├── robots.txt              # 抓取规则：全站放行，显式允许主流 AI 爬虫，指向 sitemap
+│   ├── sitemap.xml             # 站点地图（只有一个 URL）
+│   ├── llms.txt                # 给语言模型的站点摘要（llmstxt.org 约定）
+│   ├── site.webmanifest        # PWA 清单：名称、图标、主题色
 │   ├── _headers                # 响应头（仅安全头，不设缓存）
 │   └── assets/
-│       ├── css/style.css       # 全部样式、配色变量、霓虹场地、响应式
+│       ├── css/style.css       # 全部样式、配色变量、霓虹场地、介绍区、响应式
 │       ├── js/i18n.js          # 中英文字典 + 语言检测与切换（改文案只动这里）
 │       ├── js/game-core.js     # 纯逻辑：计分 / 倍率 / 难度曲线 / 评级 / 名字清洗
 │       ├── js/game.js          # 游戏主逻辑：生成目标、计时、音效、提交、排行榜
+│       ├── js/seo.js           # 结构化数据：把页面问答拼成 FAQPage JSON-LD（跟随语言）
+│       ├── og-cover.png        # 社交分享封面 1200×630
+│       ├── icon-512.png        # 应用图标（manifest / 结构化数据用）
+│       ├── icon-192.png        # 应用图标
+│       ├── icon-180.png        # iOS 添加到主屏的图标
 │       └── favicon.svg         # 站点图标
+├── scripts/
+│   └── seo-assets/             # 生成封面与图标用的源 HTML（用 Chrome 无头截图，见下方 SEO 章节）
 ├── src/
 │   ├── index.js                # Worker 入口：/api/scores 路由、scheduled 定时清空、其余交给 ASSETS
 │   └── scores.js               # 排行榜逻辑：GET 读榜 / POST 提交（含校验与节流）
@@ -312,6 +323,66 @@ curl "http://localhost:8787/__scheduled?cron=0+16+*+*+0"
 
 ---
 
+## SEO 与 GEO（搜索引擎 / 生成式引擎优化）
+
+站点是单页面游戏，天然缺可索引的正文，所以分两层做：**技术层**保证能被正常抓取和摘要，**内容层**提供可被直接引用的自包含事实。
+
+### 已经做了的
+
+| 项目 | 位置 | 说明 |
+| --- | --- | --- |
+| 标题与描述 | `index.html` + `i18n.js` 的 `meta.title` / `meta.description` | 含「30 秒」「连击」「免注册」等检索词，长度控制在不会被截断的范围 |
+| canonical | `index.html` | 固定指向 `https://home.prettylife.pw/`，`?lang=en` 之类的参数变体不会被当成重复页面 |
+| Open Graph / Twitter | `index.html` | 含 1200×630 封面与 `og:locale`，分享出去不会是没有封面的裸链接 |
+| 结构化数据 | `index.html`（WebSite / Organization / VideoGame）+ `seo.js`（FAQPage） | FAQ 直接从页面问答生成，中英切换时一起换 |
+| 语言标记 | `<html lang>` | 切换语言时同步改写，英文页不会被标成中文 |
+| 抓取文件 | `robots.txt` / `sitemap.xml` / `llms.txt` / `site.webmanifest` | 见下 |
+| 可索引正文 | `index.html` 的 `.about` 区块 | 定义段 + 规则明细 + 6 条问答，全部走 i18n |
+
+### GEO 部分的取舍
+
+- **给结论，不给形容词。** 正文第一句就是定义（「霓虹连击是一个 30 秒的连击点击小游戏」），后面每条都带具体数字（+10 / ×5 / +50 / 前 50 名 / 每周一 00:00 UTC+8），模型引用时不需要再推理。
+- **事实只写一遍。** 数字写在 `i18n.js` 的 `about.*` / `faq.*`，`llms.txt` 与 JSON-LD 是它的摘要。改规则时三处要一起改，否则会出现「页面写 ×5、llms.txt 写 ×3」这种自相矛盾。
+- **问答用 `<details>` 折叠。** 内容仍在 HTML 里能被抓取，但不会把首屏撑长。
+- **`robots.txt` 显式列出 AI 爬虫**（GPTBot、ClaudeBot、PerplexityBot、Google-Extended 等），避免被平台默认策略挡掉。
+
+### 域名写在哪
+
+换域名时要一起改，全站只有这些绝对地址：
+
+```bash
+grep -rln "home.prettylife.pw" public/ README.md
+```
+
+涉及 `public/index.html`（canonical、og:url、og:image、twitter:image、JSON-LD 的 `@id`）、`public/assets/js/seo.js` 的 `ORIGIN`、`public/robots.txt` 的 `Sitemap`、`public/sitemap.xml`、`public/llms.txt`。
+
+### 重新生成封面与图标
+
+源文件是 `scripts/seo-assets/` 下的两个 HTML，用本机 Chrome 无头截图即可，不需要装依赖：
+
+```bash
+CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
+
+"$CHROME" --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+  --window-size=1200,630 --screenshot=public/assets/og-cover.png \
+  "file:///D:/onlin_website/scripts/seo-assets/og-cover.html"
+
+for s in 512 192 180; do
+  "$CHROME" --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+    --window-size=$s,$s --screenshot=public/assets/icon-$s.png \
+    "file:///D:/onlin_website/scripts/seo-assets/icon.html"
+done
+```
+
+### 上线后怎么确认生效
+
+1. 三个文件都要能直接打开：`/robots.txt`、`/sitemap.xml`、`/llms.txt`，返回 200。
+2. 结构化数据：把首页 URL 贴进 [Rich Results Test](https://search.google.com/test/rich-results) 或 `validator.schema.org`，应识别出 `VideoGame` 与 `FAQPage`。
+3. 收录：在 Google Search Console / Bing Webmaster Tools 里提交 `sitemap.xml`，并请求编入索引。
+4. 分享预览：把首页链接发到任意聊天窗口，卡片应显示封面图与中文摘要。
+
+---
+
 ## 日常更新：改完怎么上线
 
 连了 Git 之后没有「上传服务器」这一步：推到 `main`，Cloudflare 自动重新部署。
@@ -355,6 +426,10 @@ API 响应由 Worker 声明 `cache-control: no-store`，保证排行榜永远是
 | 清空时间 | `wrangler.jsonc` 的 `triggers.crons`（UTC 时间） |
 | 玩家标签位数 | `src/scores.js` 的 `tagFor`（默认取前 4 位） |
 | 页面结构 / 新增视图 | `public/index.html` |
+| 页面下方介绍区与问答的文案 | `public/assets/js/i18n.js` 的 `about.*` / `faq.*`（同时记得同步 `public/llms.txt`） |
+| 标题、描述、分享卡片文案 | `public/assets/js/i18n.js` 的 `meta.*` / `og.*`（`index.html` 里的原始值是给不跑 JS 的爬虫的兜底） |
+| 域名（canonical / og:url / sitemap） | `index.html` + `seo.js` 的 `ORIGIN` + `robots.txt` + `sitemap.xml` + `llms.txt`，用 `grep -rln "home.prettylife.pw"` 找全 |
+| 分享封面、图标 | `scripts/seo-assets/*.html` 改完按上方命令重新截图 |
 | 主色、场地配色、深浅色 | `public/assets/css/style.css` 顶部 `:root` 与 `html[data-theme="dark"]` |
 | 站点图标 | `public/assets/favicon.svg` |
 | 安全头 | `public/_headers`（只加安全头，不加缓存） |
